@@ -1,0 +1,119 @@
+---
+title: "Report"
+author: "Me"
+output: html_document
+---
+
+First of all, the packages needed for this analysis are loaded.
+
+```{r}
+library(caret)
+library(ggplot2)
+```
+
+After that, training data is loaded:
+
+```{r}
+training <- read.csv("pml-training.csv", na.strings = c("NA",""))
+```
+
+It should be highlighted that both NA and blank characters are considered as NAs. A new data frame called new_train is constructed omitting those columns with many NA values:
+
+```{r}
+col = 160;
+for (i in 1:159) {
+    if (sum(is.na(training[,i]))==0) {
+        col <- c(col,i)
+    }
+}
+new_train <- training[,col]
+```
+
+Then, the values of the classe variable are converted to integer values from 1 to 5 and saved in a variable called y as I have had some problems when using the cor() function.
+
+```{r}
+len <- nrow(new_train)
+y <- vector(mode="numeric",length=len)
+for (i in 1:len) {
+    if (new_train[i,1]=='A')
+        y[i] <- 1
+    else if (new_train[i,1]=='B')
+        y[i] <- 2
+    else if (new_train[i,1]=='C')
+        y[i] <- 3
+    else if (new_train[i,1]=='D')
+        y[i] <- 4
+    else if (new_train[i,1]=='E')
+        y[i] <- 5
+}
+```
+
+After that, an analysis of the most relevant variables is made. Firstly, the first 6 variables are not taken into account as they are considered irrelevant after some raw analysis. For analysing which can be the most relevant variables the cor() function is used:
+
+```{r}
+len_col <- ncol(new_train)
+cor_val <- cor(x=new_train[,8:len_col],y=y)
+```
+
+Then, the most relevant variables are selected. A threshold of 0.15 in the response of the cor() function has been established in order to extract the most relevant variables.
+
+```{r}
+cor_pos <- NULL
+for (i in 1:length(cor_val)) {
+    if (abs(cor_val[i])>0.15)
+        cor_pos <- c(cor_pos,i)
+}
+cor_pos <- cor_pos + 7
+```
+
+The training data is splitted into two groups: some data (60%) to train the model and the rest of the data (40%) to test the model.
+
+```{r}
+inTrain <- createDataPartition(new_train$X,p=60/100)[[1]]
+train_fit <- new_train[inTrain,]
+test_fit <- new_train[-inTrain,]
+```
+
+The columns in cor_pos are the most relevant. Thus, those columns are used in the training process. Random forest is used for the training.
+
+```{r}
+fit_model <- train(x=train_fit[,cor_pos],y=train_fit[,1])
+```
+
+Once the model is constructed, the 40% of the data is used to test the model.
+
+```{r}
+large_pred <- predict(fit_model,test_fit[,cor_pos])
+large_real <- test_fit[,1]
+errors <- length(large_pred)-sum(large_pred==large_real)
+error <- errors/length(large_pred)*100
+```
+
+An error of `r error`% is made in the model. In order to obtain better results, other variables should be chosen.
+
+The 20 tests are also carried out as:
+
+```{r}
+testing <- read.csv("pml-testing.csv", na.strings = c("NA",""))
+new_test <- testing[,col]
+pred <- predict(fit_model,new_test[,cor_pos])
+pred
+```
+
+Only one test is done incorrectly (number 3), which implies an error rate of 5%.
+
+The information given by the model is shown below:
+
+```{r}
+fit_model
+```
+
+An accuracy of 0.886 is obtained.
+
+The confusionMatrix() function can be used to analyse the results regarding the 40% of data used for testing:
+
+```{r}
+confusionMatrix(large_pred,large_real)
+```
+
+A balanced accuracy between 0.9583 and 0.9182 is obtained, depending on the factor level.
